@@ -2,15 +2,24 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    
+    start_rviz = LaunchConfiguration("start_rviz")
+
     nav2_yaml = os.path.join(get_package_share_directory('localization_server'), 'config', 'amcl_config.yaml')
     map_file = os.path.join(get_package_share_directory('map_server'), 'config', 'warehouse_map_sim.yaml')
     rviz_config_file = os.path.join(get_package_share_directory('localization_server'), 'config', 'localizer_rviz_config.rviz')
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "start_rviz",
+            default_value="False"
+        ),
+
         Node(
             package='nav2_map_server',
             executable='map_server',
@@ -42,6 +51,7 @@ def generate_launch_description():
             executable="rviz2",
             output="screen",
             name="rviz2",
-            arguments=["-d", rviz_config_file]
+            arguments=["-d", rviz_config_file],
+            condition=IfCondition(start_rviz)
         )
     ])
