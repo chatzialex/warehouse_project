@@ -9,6 +9,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     start_rviz = LaunchConfiguration("start_rviz")
+    use_sim_time = LaunchConfiguration("use_sim_time")
 
     nav2_yaml = os.path.join(get_package_share_directory('localization_server'), 'config', 'amcl_config.yaml')
     map_file = os.path.join(get_package_share_directory('map_server'), 'config', 'warehouse_map_sim.yaml')
@@ -20,12 +21,17 @@ def generate_launch_description():
             default_value="False"
         ),
 
+      DeclareLaunchArgument(
+        "use_sim_time",
+        default_value="True"
+      ),
+
         Node(
             package='nav2_map_server',
             executable='map_server',
             name='map_server',
             output='screen',
-            parameters=[{'use_sim_time': True}, 
+            parameters=[{'use_sim_time': use_sim_time},
                         {'yaml_filename':map_file}]
         ),
             
@@ -42,7 +48,7 @@ def generate_launch_description():
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
             output='screen',
-            parameters=[{'use_sim_time': True},
+            parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': True},
                         {'node_names': ['map_server', 'amcl']}]
         ),
