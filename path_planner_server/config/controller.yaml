@@ -67,7 +67,7 @@ local_costmap:
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: robot_odom
-      robot_base_frame: robot_base_link
+      robot_base_frame: robot_base_footprint
       use_sim_time: True
       rolling_window: true
       width: 1
