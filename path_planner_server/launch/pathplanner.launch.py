@@ -16,6 +16,8 @@ def generate_launch_description():
     planner_yaml = os.path.join(get_package_share_directory('path_planner_server'), 'config', 'planner_server.yaml')
     recovery_yaml = os.path.join(get_package_share_directory('path_planner_server'), 'config', 'recovery.yaml')
     rviz_config_file = os.path.join(get_package_share_directory('path_planner_server'), 'config', 'pathplanner_rviz_config.rviz')
+    waypoint_follower_yaml = os.path.join(get_package_share_directory(
+        'path_planner_server'), 'config', 'waypoint_follower.yaml')
 
     
     return LaunchDescription([
@@ -56,6 +58,12 @@ def generate_launch_description():
             output='screen',
             parameters=[bt_navigator_yaml, {'use_sim_time': use_sim_time}]),
         Node(
+            package='nav2_waypoint_follower',
+            executable='waypoint_follower',
+            name='waypoint_follower',
+            output='screen',
+            parameters=[waypoint_follower_yaml]),
+        Node(
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
             name='lifecycle_manager_pathplanner',
@@ -65,7 +73,8 @@ def generate_launch_description():
                         {'node_names': ['planner_server',
                                         'controller_server',
                                         'recoveries_server',
-                                        'bt_navigator']}]),
+                                        'bt_navigator',
+                                        'waypoint_follower']}]),
         Node(
             package="rviz2",
             executable="rviz2",
