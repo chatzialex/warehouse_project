@@ -5,6 +5,7 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Empty
 
@@ -19,7 +20,14 @@ class MoveShelfToShip(Node):
     def __init__(self):
         super().__init__('move_shelf_to_ship')
 
-        self.publisher_ = self.create_publisher(Empty, 'elevator_down', 1)
+        self.publisher_ = self.create_publisher(
+            Empty,
+            'elevator_down',
+            QoSProfile(
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                depth=1
+            )
+        )
         self.navigator_ = BasicNavigator()
 
         self.route = {}
