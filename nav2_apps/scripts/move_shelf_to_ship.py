@@ -4,16 +4,17 @@ from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Empty
 
 
 class MoveShelfToShip(Node):
-    goals = [
-        {"position": {"x": 0.0, "y": 0.0}, "orientation": {"z": 0.0, "w": 1.0}},  # initial position
-        {"position": {"x": 5.5, "y": 0.0}, "orientation": {"z": -0.707, "w": 0.707}},  # loading position
-        {"position": {"x": 2.5, "y": 1.3}, "orientation": {"z": 0.707, "w": 0.707}}  # shipping position
-    ]
+    goals = {
+        'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
+        'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
+        'shipping_position': {'position': {'x': 2.5, 'y': 1.3}, 'orientation': {'z': 0.707, 'w': 0.707}}
+    }
 
     def __init__(self):
         super().__init__('move_shelf_to_ship')
@@ -21,55 +22,54 @@ class MoveShelfToShip(Node):
         self.publisher_ = self.create_publisher(Empty, 'elevator_down', 1)
         self.navigator_ = BasicNavigator()
 
-        self.route = []
+        self.route = {}
         waypoint = PoseStamped()
         waypoint.header.frame_id = 'map'
-        for pt in self.goals:
-            waypoint.pose.position.x = pt["position"]["x"]
-            waypoint.pose.position.y = pt["position"]["y"]
-            waypoint.pose.orientation.z = pt["orientation"]["z"]
-            waypoint.pose.orientation.w = pt["orientation"]["w"]
-            self.route.append(deepcopy(waypoint))
+        for name, pt in self.goals.items():
+            waypoint.pose.position.x = pt['position']['x']
+            waypoint.pose.position.y = pt['position']['y']
+            waypoint.pose.orientation.z = pt['orientation']['z']
+            waypoint.pose.orientation.w = pt['orientation']['w']
+            self.route[name] = deepcopy(waypoint)
 
-        self.route[0].header.stamp = self.navigator_.get_clock().now().to_msg()
-        self.navigator_.setInitialPose(self.route[0])
+        self.route['initial_position'].header.stamp = self.navigator_.get_clock().now().to_msg()
+        self.navigator_.setInitialPose(self.route['initial_position'])
         self.navigator_.waitUntilNav2Active()
 
-        self.timer = self.create_timer(0.2, self.timer_cb)
+        self.timer = self.create_timer(0.2, self.timerCb)
 
-    def timer_cb(self):
+    def timerCb(self):
         self.timer.cancel()
 
-        for pt in self.route[1:]:
-            pt.header.stamp = self.navigator_.get_clock().now().to_msg()
-        self.navigator_.followWaypoints(self.route[1:])
+        success = (self.goToPose('loading position')
+                   and self.goToPose('shipping_position')
+        )
 
-        # Do something during your route (e.x. AI to analyze stock information or upload to the cloud)
-        # Print the current waypoint ID for the demonstration
+        self.goToPose("initial_position")
+
+    def goToPose(self, pose_name):
+        self.route[pose_name].header.stamp = self.navigator_.get_clock().now().to_msg()
+        self.navigator_.goToPose(self.route[pose_name])
+
         i = 0
         while not self.navigator_.isTaskComplete():
             i = i + 1
             feedback = self.navigator_.getFeedback()
-            if feedback and i % 5 == 0:
-                self.get_logger().info(
-                    f'Executing current waypoint {feedback.current_waypoint + 1}/{len(self.route)-1}'
-                )
+            if feedback and i % 20 == 0:
+                self.get_logger().info(f'Estimated time of arrival at {pose_name}: '
+                    f'{Duration.from_msg(feedback.estimated_time_remaining).nanoseconds / 1e9} '
+                    'seconds')
 
         result = self.navigator_.getResult()
         if result == TaskResult.SUCCEEDED:
-            self.get_logger().info('Route completed! Returning to start...')
+            self.get_logger().info(f'Arrived at {pose_name}.')
+            return True
         elif result == TaskResult.CANCELED:
-            self.get_logger().info('Route cancelled. Returning to start...')
+            self.get_logger().info(f'Route to {pose_name} was cancelled.')
+            return False
         elif result == TaskResult.FAILED:
-            self.get_logger().warn('Route failed! Returning to start...')
-
-        # go back to start
-        self.route[0].header.stamp = self.navigator_.get_clock().now().to_msg()
-        self.navigator_.goToPose(self.route[0])
-        while not self.navigator_.isTaskComplete():
-            pass
-
-        exit(0)
+            self.get_logger().warn(f'Failed to arrive to {pose_name}.')
+            return False
 
 def main():
     rclpy.init()
