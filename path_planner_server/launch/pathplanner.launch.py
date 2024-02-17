@@ -76,6 +76,13 @@ def generate_launch_description():
                                         'bt_navigator',
                                         'waypoint_follower']}]),
         Node(
+            package='path_planner_server',
+            executable='attach_server',
+            name='attach_server',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}]
+        ),
+        Node(
             package="rviz2",
             executable="rviz2",
             output="screen",
