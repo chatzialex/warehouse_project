@@ -8,6 +8,7 @@ from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Empty
+from std_srvs.srv import Trigger
 
 
 class MoveShelfToShip(Node):
@@ -28,8 +29,12 @@ class MoveShelfToShip(Node):
                 depth=1
             )
         )
-        self.navigator_ = BasicNavigator()
 
+        self.client_ = self.create_client(Trigger, 'approach_shelf')
+        while not self.client_.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Service not available, waiting again...')
+
+        self.navigator_ = BasicNavigator()
         self.route = {}
         waypoint = PoseStamped()
         waypoint.header.frame_id = 'map'
@@ -39,7 +44,6 @@ class MoveShelfToShip(Node):
             waypoint.pose.orientation.z = pt['orientation']['z']
             waypoint.pose.orientation.w = pt['orientation']['w']
             self.route[name] = deepcopy(waypoint)
-
         self.route['initial_position'].header.stamp = self.navigator_.get_clock().now().to_msg()
         self.navigator_.setInitialPose(self.route['initial_position'])
         self.navigator_.waitUntilNav2Active()
@@ -50,6 +54,7 @@ class MoveShelfToShip(Node):
         self.timer.cancel()
 
         success = (self.goToPose('loading position')
+                   and self.attachToShelf()
                    and self.goToPose('shipping_position')
         )
 
@@ -78,6 +83,15 @@ class MoveShelfToShip(Node):
         elif result == TaskResult.FAILED:
             self.get_logger().warn(f'Failed to arrive to {pose_name}.')
             return False
+
+    def attachToShelf(self):
+        self.get_logger().info('Attempting to attach shelf.')
+        future = self.client_.call_async()
+        rclpy.spin_until_future_complete(self, future)
+        if future.result().success:
+            self.get_logger().info('Successfully attached to shelf.')
+        else:
+            self._logger().warn('Failed to attach to shelf.')
 
 def main():
     rclpy.init()
