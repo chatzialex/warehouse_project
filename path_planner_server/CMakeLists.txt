@@ -48,16 +48,8 @@ ament_target_dependencies(attach_server
 rosidl_target_interfaces(attach_server
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(attach_client src/attach_client.cpp)
-ament_target_dependencies(attach_client
-  rclcpp
-  rclcpp_components
-)
-rosidl_target_interfaces(attach_client
-  ${PROJECT_NAME} "rosidl_typesupport_cpp")
-
 install(
-  TARGETS attach_server attach_client
+  TARGETS attach_server
   DESTINATION lib/${PROJECT_NAME}/)
 
 install(
