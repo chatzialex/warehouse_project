@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
@@ -28,11 +29,6 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/GoToLoading.srv"
-  DEPENDENCIES std_msgs
-)
-
 include_directories(include)
 
 add_executable(attach_server src/attach_server.cpp)
@@ -41,12 +37,11 @@ ament_target_dependencies(attach_server
   sensor_msgs
   geometry_msgs
   std_msgs
+  std_srvs
   tf2
   tf2_ros
   tf2_eigen
 )
-rosidl_target_interfaces(attach_server
-  ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(
   TARGETS attach_server

@@ -1,14 +1,13 @@
 #include "path_planner_server/attach_server.hpp"
 
 #include "geometry_msgs/msg/twist.hpp"
-#include "path_planner_server/srv/go_to_loading.hpp"
 #include "rclcpp/logging.hpp"
 #include "rclcpp/qos.hpp"
 #include "rmw/qos_profiles.h"
 #include "rmw/types.h"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_msgs/msg/detail/string__struct.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #include <tf2_eigen/tf2_eigen.h>
 
@@ -49,7 +48,7 @@ AttachServer::AttachServer(const std::string &node_name,
       tf_listener_{
           std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_)},
       tf_broadcaster_{std::make_shared<tf2_ros::TransformBroadcaster>(this)},
-      service_{this->create_service<GoToLoading>(
+      service_{this->create_service<Trigger>(
           kServiceName,
           std::bind(&AttachServer::service_cb, this, std::placeholders::_1,
                     std::placeholders::_2),
@@ -151,12 +150,11 @@ void AttachServer::subscription_cb(const std::shared_ptr<const LaserScan> msg) {
   }
 }
 
-void AttachServer::service_cb(
-    const std::shared_ptr<GoToLoading::Request> req,
-    const std::shared_ptr<GoToLoading::Response> res) {
+void AttachServer::service_cb(const std::shared_ptr<Trigger::Request> /*req*/,
+                              const std::shared_ptr<Trigger::Response> res) {
   RCLCPP_INFO(this->get_logger(), "%s service called", kServiceName);
 
-  res->complete = false;
+  res->success = false;
 
   // Publish center frame.
 
@@ -187,10 +185,6 @@ void AttachServer::service_cb(
         return {{base_to_goal.translation()[0], base_to_goal.translation()[1]}};
       }};
 
-  if (!req->attach_to_shelf) {
-    goto end;
-  }
-
   // Move to center frame
 
   RCLCPP_INFO(this->get_logger(), "Moving towards the center point...");
@@ -212,10 +206,9 @@ void AttachServer::service_cb(
   RCLCPP_INFO(this->get_logger(), "Attaching shelf...");
   elevator_up_publisher_->publish(std_msgs::msg::String{});
 
-end:
   RCLCPP_INFO(this->get_logger(), "Done.");
   publish_mode_ = CenterPublishMode::Off;
-  res->complete = true;
+  res->success = true;
 }
 
 std::optional<Eigen::Isometry3d>

@@ -2,11 +2,11 @@
 #define PATH_PLANNER_SERVER__ATTACH_SERVER_HPP_
 
 #include "geometry_msgs/msg/twist.hpp"
-#include "path_planner_server/srv/go_to_loading.hpp"
 #include "rclcpp/callback_group.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_msgs/msg/detail/string__struct.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_srvs/srv/detail/trigger__struct.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #include "rclcpp/node.hpp"
 #include "rclcpp/publisher.hpp"
@@ -32,7 +32,7 @@ namespace path_planner_server {
 using namespace std::chrono_literals;
 
 using LaserScan = sensor_msgs::msg::LaserScan;
-using GoToLoading = path_planner_server::srv::GoToLoading;
+using Trigger = std_srvs::srv::Trigger;
 using Twist = geometry_msgs::msg::Twist;
 
 enum class CenterPublishMode { Off, On, Once };
@@ -68,8 +68,8 @@ private:
   constexpr static auto kMotionTimeout{10s};
 
   void subscription_cb(const std::shared_ptr<const LaserScan> msg);
-  void service_cb(const std::shared_ptr<GoToLoading::Request> req,
-                  const std::shared_ptr<GoToLoading::Response> res);
+  void service_cb(const std::shared_ptr<Trigger::Request> req,
+                  const std::shared_ptr<Trigger::Response> res);
 
   std::optional<Eigen::Isometry3d> getTransform(const std::string &source_frame,
                                                 const std::string &dest_frame);
@@ -84,7 +84,7 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_{};
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{};
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  rclcpp::Service<GoToLoading>::SharedPtr service_{};
+  rclcpp::Service<Trigger>::SharedPtr service_{};
 
   std::atomic<CenterPublishMode> publish_mode_{CenterPublishMode::Off};
   std::atomic<bool> center_published_{false};
