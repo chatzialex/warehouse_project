@@ -7,6 +7,8 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Polygon
+from geometry_msgs.msg import Point32
 from std_msgs.msg import Empty
 from std_srvs.srv import Trigger
 
@@ -15,10 +17,28 @@ class MoveShelfToShipNode(Node):
     def __init__(self, node_name):
         super().__init__(node_name)
 
-        self.publisher_ = self.create_publisher(
+        self.elevator_down_publisher_ = self.create_publisher(
             Empty,
             'elevator_down',
             QoSProfile(
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                depth=1
+            )
+        )
+
+        self.local_footprint_publisher_ = self.create_publisher(
+            Polygon,
+            'local_costmap/footprint',
+             QoSProfile(
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                depth=1
+            )
+        )
+
+        self.global_footprint_publisher_ = self.create_publisher(
+            Polygon,
+            'global_costmap/footprint',
+             QoSProfile(
                 reliability=QoSReliabilityPolicy.RELIABLE,
                 depth=1
             )
@@ -33,6 +53,11 @@ class MoveShelfToShip():
         'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
         'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
         'shipping_position': {'position': {'x': 2.5, 'y': 1.3}, 'orientation': {'z': 0.707, 'w': 0.707}}
+    }
+
+    footprints = {
+        'robot': [[0.235, 0.235], [0.235, -0.235], [-0.235, -0.235], [-0.235, 0.235]],
+        'robot_with_box': [[0.385, 0.475], [0.385, -0.475], [-0.385, -0.475], [-0.385, 0.475]]
     }
 
     def __init__(self):
@@ -55,7 +80,9 @@ class MoveShelfToShip():
     def perform_motion(self):
         success = (self.goToPose('loading position')
                    and self.attachToShelf()
+                   and self.updateFootprint('robot_with_box')
                    and self.goToPose('shipping_position')
+                   and self.updateFootprint('robot')
         )
 
         self.goToPose("initial_position")
@@ -95,6 +122,21 @@ class MoveShelfToShip():
         else:
             print('Failed to attach to shelf.')
         return future.result().success
+
+    def updateFootprint(self, footprint_name):
+        polygon = Polygon()
+        point = Point32()
+        for pt in self.footprints[footprint_name]:
+            point.x = pt[0]
+            point.y = pt[1]
+            polygon.points.append(deepcopy(point))
+
+        self.node_.local_footprint_publisher_.publish(polygon)
+        self.node_.global_footprint_publisher_.publish(polygon)
+        rclpy.spin_once(self.node_)
+
+        return True
+
 
 def main():
     rclpy.init()
