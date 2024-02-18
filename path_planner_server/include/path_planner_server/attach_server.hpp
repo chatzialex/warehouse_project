@@ -47,15 +47,14 @@ private:
   constexpr static char kNodeName[]{"approach_service_server"};
   constexpr static char kServiceName[]{"approach_shelf"};
   constexpr static char kScanTopicName[]{"/scan"};
-  constexpr static char kCmdTopicName[]{
-      "diffbot_base_controller/cmd_vel_unstamped"};
+  constexpr static char kCmdTopicName[]{"cmd_vel"};
   constexpr static char kElevatorUpTopicName[]{"elevator_up"};
 
-  constexpr static char kOdomFrame[]{"odom"};
+  constexpr static char kOdomFrame[]{"robot_odom"};
   constexpr static char kBaseLinkFrame[]{"robot_base_link"};
   constexpr static char kScanFrame[]{"robot_front_laser_base_link"};
   constexpr static char kCartFrame[]{"cart_frame"};
-  constexpr static char kPublishFrame[]{"odom"};
+  constexpr static char kPublishFrame[]{"robot_odom"};
 
   constexpr static double kAngleLeftMin{-1.5708}; // [rad]
   constexpr static double kAngleRightMax{1.5708}; // [rad]

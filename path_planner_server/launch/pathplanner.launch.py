@@ -80,7 +80,8 @@ def generate_launch_description():
             executable='attach_server',
             name='attach_server',
             output='screen',
-            parameters=[{'use_sim_time': use_sim_time}]
+            parameters=[{'use_sim_time': use_sim_time}],
+            remappings=[('/cmd_vel', '/robot/cmd_vel')]
         ),
         Node(
             package="rviz2",
