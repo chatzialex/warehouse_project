@@ -6,7 +6,8 @@
 #include "rmw/qos_profiles.h"
 #include "rmw/types.h"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/detail/empty__struct.hpp"
+#include "std_msgs/msg/empty.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
 #include <tf2_eigen/tf2_eigen.h>
@@ -37,7 +38,7 @@ AttachServer::AttachServer(const std::string &node_name,
             return options;
           }())},
       publisher_{this->create_publisher<Twist>(kCmdTopicName, 1)},
-      elevator_up_publisher_{this->create_publisher<std_msgs::msg::String>(
+      elevator_up_publisher_{this->create_publisher<std_msgs::msg::Empty>(
           kElevatorUpTopicName,
           [] {
             rclcpp::QoS qos{1};
@@ -203,7 +204,7 @@ void AttachServer::service_cb(const std::shared_ptr<Trigger::Request> /*req*/,
   // Load shelf.
 
   RCLCPP_INFO(this->get_logger(), "Attaching shelf...");
-  elevator_up_publisher_->publish(std_msgs::msg::String{});
+  elevator_up_publisher_->publish(std_msgs::msg::Empty{});
 
   RCLCPP_INFO(this->get_logger(), "Done.");
   publish_mode_ = CenterPublishMode::Off;

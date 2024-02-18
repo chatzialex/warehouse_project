@@ -4,7 +4,8 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/callback_group.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
-#include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/detail/empty__struct.hpp"
+#include "std_msgs/msg/empty.hpp"
 #include "std_srvs/srv/detail/trigger__struct.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
@@ -79,7 +80,7 @@ private:
   rclcpp::CallbackGroup::SharedPtr group_2_;
   rclcpp::Subscription<LaserScan>::SharedPtr subscription_{};
   rclcpp::Publisher<Twist>::SharedPtr publisher_{};
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr elevator_up_publisher_{};
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr elevator_up_publisher_{};
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_{};
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{};
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
