@@ -30,7 +30,7 @@ def launch_setup(context, *args, **kwargs):
       output='screen',
       parameters=[{'use_sim_time': use_sim_time},
                   {'autostart': True},
-                  {'node_names': ['map_server']}]),
+                  {'node_names': ['map_server',]}]),
 
     Node(
       package="rviz2",
