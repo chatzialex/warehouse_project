@@ -117,9 +117,8 @@ void AttachServer::subscription_cb(const std::shared_ptr<const LaserScan> msg) {
     Eigen::Vector3d y{center_left->first - center_right->first,
                       center_left->second - center_right->second, 0};
     y.normalize();
-    Eigen::Vector3d z{-pub_to_scan->linear()(3, 1),
-                      -pub_to_scan->linear()(3, 2),
-                      -pub_to_scan->linear()(3, 3)};
+    Eigen::Vector3d z{pub_to_scan->linear()(2, 0), pub_to_scan->linear()(2, 1),
+                      pub_to_scan->linear()(2, 2)};
     Eigen::Vector3d x{y.cross(z)};
     scan_to_center.linear() =
         (Eigen::Matrix3d() << x, y, z).finished().transpose();
