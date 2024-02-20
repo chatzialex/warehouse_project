@@ -57,7 +57,7 @@ class MoveShelfToShip():
 
     footprints = {
         'robot': [[0.235, 0.235], [0.235, -0.235], [-0.235, -0.235], [-0.235, 0.235]],
-        'robot_with_box': [[0.43, 0.435], [0.43, -0.435], [-0.43, -0.435], [-0.43, 0.435]]
+        'robot_with_box': [[0.43, 0.5], [0.43, -0.5], [-0.43, -0.5], [-0.43, 0.5]]
     }
 
     def __init__(self):
@@ -82,6 +82,7 @@ class MoveShelfToShip():
                    and self.attachToShelf()
                    and self.updateFootprint('robot_with_box')
                    and self.goToPose('shipping_position')
+                   and self.elevatorDown()
                    and self.updateFootprint('robot')
         )
 
@@ -136,6 +137,11 @@ class MoveShelfToShip():
         rclpy.spin_once(self.node_)
 
         return True
+
+    def elevatorDown(self):
+        print('Lowering elevator.')
+        self.node_.elevator_down_publisher_.publish(Empty())
+        rclpy.spin_once(self.node_)
 
 
 def main():
