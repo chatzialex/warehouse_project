@@ -32,21 +32,18 @@ def generate_launch_description():
             executable='controller_server',
             name='controller_server',
             output='screen',
-            namespace='/',
             parameters=[controller_yaml, {'use_sim_time': use_sim_time}],
             remappings=[('/cmd_vel', '/robot/cmd_vel')]),
         Node(
             package='nav2_planner',
             executable='planner_server',
             name='planner_server',
-            namespace='/',
             output='screen',
             parameters=[planner_yaml, {'use_sim_time': use_sim_time}]),
         Node(
             package='nav2_recoveries',
             executable='recoveries_server',
             name='recoveries_server',
-            namespace='/',
             parameters=[recovery_yaml, {'use_sim_time': use_sim_time}],
             output='screen',
             remappings=[('/cmd_vel', '/robot/cmd_vel')]),
@@ -54,7 +51,6 @@ def generate_launch_description():
             package='nav2_bt_navigator',
             executable='bt_navigator',
             name='bt_navigator',
-            namespace='/',
             output='screen',
             parameters=[bt_navigator_yaml, {'use_sim_time': use_sim_time}]),
         Node(
@@ -62,7 +58,7 @@ def generate_launch_description():
             executable='waypoint_follower',
             name='waypoint_follower',
             output='screen',
-            parameters=[waypoint_follower_yaml]),
+            parameters=[waypoint_follower_yaml, {'use_sim_time': use_sim_time}]),
         Node(
             package='nav2_map_server',
             executable='map_server',

@@ -28,7 +28,6 @@ def launch_setup(context, *args, **kwargs):
     Node(
       package='nav2_amcl',
       executable='amcl',
-      namespace='/',
       name='amcl',
       output='screen',
       parameters=[nav2_yaml, {'use_sim_time': use_sim_time}]
