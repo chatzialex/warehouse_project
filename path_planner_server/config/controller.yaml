@@ -71,7 +71,7 @@ local_costmap:
       width: 1
       height: 1
       resolution: 0.05
-      footprint: '[[0.235, 0.235], [0.235, -0.235], [-0.235, -0.235], [-0.235, 0.235]]'
+      footprint: '[[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]]'
       plugins: ["obstacle_layer", "inflation_layer"]
       filters: ["keepout_filter", "inflation_layer"]
       obstacle_layer:
@@ -91,7 +91,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.35
+        inflation_radius: 0.45
       always_send_full_costmap: True
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
