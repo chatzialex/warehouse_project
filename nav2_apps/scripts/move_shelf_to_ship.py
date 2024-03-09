@@ -1,4 +1,7 @@
 from copy import deepcopy
+import argparse
+import types
+import time
 
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
@@ -10,21 +13,32 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Polygon
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Empty
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 
 class MoveShelfToShipNode(Node):
-    def __init__(self, node_name):
+    def __init__(self, node_name, real_robot):
         super().__init__(node_name)
 
-        self.elevator_down_publisher_ = self.create_publisher(
-            Empty,
-            'elevator_down',
-            QoSProfile(
-                reliability=QoSReliabilityPolicy.RELIABLE,
-                depth=1
+        if real_robot:
+            self.elevator_down_publisher_ = self.create_publisher(
+                String,
+                'elevator_down',
+                QoSProfile(
+                    reliability=QoSReliabilityPolicy.RELIABLE,
+                    depth=1
+                )
             )
-        )
+        else:
+            self.elevator_down_publisher_ = self.create_publisher(
+                Empty,
+                'elevator_down',
+                QoSProfile(
+                    reliability=QoSReliabilityPolicy.RELIABLE,
+                    depth=1
+                )
+            )
 
         self.local_footprint_publisher_ = self.create_publisher(
             Polygon,
@@ -49,19 +63,36 @@ class MoveShelfToShipNode(Node):
             print('Service not available, waiting again...')
 
 class MoveShelfToShip():
-    goals = {
-        'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
-        'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
-        'shipping_position': {'position': {'x': 2.5, 'y': 1.3}, 'orientation': {'z': 0.707, 'w': 0.707}}
-    }
-
     footprints = {
         'robot': [[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]],
         'robot_with_box': [[0.50, 0.50], [0.50, -0.50], [-0.50, -0.50], [-0.50, 0.50]]
     }
 
-    def __init__(self):
-        self.node_ = MoveShelfToShipNode('move_shelf_to_ship_node')
+    def __init__(self, real_robot):
+        if (real_robot):
+            self.goals = {
+                'initial_position': {'position': {'x': 0.216, 'y': 0.0}, 'orientation': {'z': 0.285, 'w': 0.959}},
+                'loading position': {'position': {'x': 4.463, 'y': 0.970}, 'orientation': {'z': -0.614, 'w': 0.789}},
+                'shipping_position': {'position': {'x': 1.811, 'y': 1.534}, 'orientation': {'z': 0.737, 'w': 0.676}}
+            }
+        else:
+            self.goals = {
+                'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
+                'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
+                'shipping_position': {'position': {'x': 2.5, 'y': 1.3}, 'orientation': {'z': 0.707, 'w': 0.707}}
+            }
+
+        self.node_ = MoveShelfToShipNode(node_name='move_shelf_to_ship_node', real_robot=real_robot)
+
+        def elevatorDown(self):
+            if real_robot:
+                self.node_.elevator_down_publisher_.publish(String())
+            else:
+                self.node_.elevator_down_publisher_.publish(Empty())
+            rclpy.spin_once(self.node_)
+            time.sleep(3)
+            return True
+        self.elevatorDown = types.MethodType(elevatorDown, self)
 
         self.navigator_ = BasicNavigator()
         self.route_ = {}
@@ -78,6 +109,7 @@ class MoveShelfToShip():
         self.navigator_.waitUntilNav2Active()
 
     def perform_motion(self):
+        self.elevatorDown()
         success = (self.goToPose('loading position')
                    and self.attachToShelf()
                    and self.updateFootprint('robot_with_box')
@@ -138,17 +170,15 @@ class MoveShelfToShip():
 
         return True
 
-    def elevatorDown(self):
-        print('Lowering elevator.')
-        self.node_.elevator_down_publisher_.publish(Empty())
-        rclpy.spin_once(self.node_)
-        return True
-
 
 def main():
+    parser=argparse.ArgumentParser(description="Move shelf to ship.")
+    parser.add_argument('--real_robot', action='store_true', help='Use the goals specified for the real robot.')
+    args=parser.parse_args()
+
     rclpy.init()
 
-    move_shelf_to_ship = MoveShelfToShip()
+    move_shelf_to_ship = MoveShelfToShip(real_robot=args.real_robot)
     move_shelf_to_ship.perform_motion()
 
     rclpy.shutdown()

@@ -7,7 +7,9 @@
 #include "rmw/types.h"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/detail/empty__struct.hpp"
+#include "std_msgs/msg/detail/string__struct.hpp"
 #include "std_msgs/msg/empty.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
 #include <tf2_eigen/tf2_eigen.h>
@@ -38,13 +40,6 @@ AttachServer::AttachServer(const std::string &node_name,
             return options;
           }())},
       publisher_{this->create_publisher<Twist>(kCmdTopicName, 1)},
-      elevator_up_publisher_{this->create_publisher<std_msgs::msg::Empty>(
-          kElevatorUpTopicName,
-          [] {
-            rclcpp::QoS qos{1};
-            qos.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
-            return qos;
-          }())},
       tf_buffer_{std::make_unique<tf2_ros::Buffer>(this->get_clock())},
       tf_listener_{
           std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_)},
@@ -54,7 +49,33 @@ AttachServer::AttachServer(const std::string &node_name,
           std::bind(&AttachServer::service_cb, this, std::placeholders::_1,
                     std::placeholders::_2),
           rmw_qos_profile_services_default, group_2_)} {
-  RCLCPP_INFO(this->get_logger(), "Started %s service server.", kServiceName);
+  rcl_interfaces::msg::ParameterDescriptor
+      elevator_up_string_param_description{};
+  elevator_up_string_param_description.description =
+      "If true, publish message of type std_msgs::msg::String to /elevator_up."
+      "If false, publish std_msgs::msg::Empty";
+  this->declare_parameter<bool>(kElevatorUpStringParamName, false,
+                                elevator_up_string_param_description);
+  bool string_publisher{};
+  this->get_parameter(kElevatorUpStringParamName, string_publisher);
+
+  rclcpp::QoS qos{1};
+  qos.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+
+  if (string_publisher) {
+    elevator_up_string_publisher_ =
+        this->create_publisher<std_msgs::msg::String>(kElevatorUpTopicName,
+                                                      qos);
+  } else {
+    elevator_up_empty_publisher_ =
+        this->create_publisher<std_msgs::msg::Empty>(kElevatorUpTopicName, qos);
+  }
+  RCLCPP_INFO(this->get_logger(),
+              "Started %s service server. Will publish %s to the %s topic.",
+              kServiceName,
+              string_publisher ? "std_msgs::msg::String"
+                               : "std_msgs::msg::Empty",
+              kElevatorUpTopicName);
 }
 
 void AttachServer::subscription_cb(const std::shared_ptr<const LaserScan> msg) {
@@ -204,7 +225,12 @@ void AttachServer::service_cb(const std::shared_ptr<Trigger::Request> /*req*/,
   // Load shelf.
 
   RCLCPP_INFO(this->get_logger(), "Attaching shelf...");
-  elevator_up_publisher_->publish(std_msgs::msg::Empty{});
+  if (elevator_up_string_publisher_) {
+    elevator_up_string_publisher_->publish(std_msgs::msg::String{});
+  } else if (elevator_up_empty_publisher_) {
+    elevator_up_empty_publisher_->publish(std_msgs::msg::Empty{});
+  }
+  rclcpp::sleep_for(std::chrono::seconds(kLoadShelfDelayDuration));
 
   RCLCPP_INFO(this->get_logger(), "Done.");
   publish_mode_ = CenterPublishMode::Off;

@@ -5,7 +5,9 @@
 #include "rclcpp/callback_group.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "std_msgs/msg/detail/empty__struct.hpp"
+#include "std_msgs/msg/detail/string__struct.hpp"
 #include "std_msgs/msg/empty.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/detail/trigger__struct.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
@@ -50,22 +52,25 @@ private:
   constexpr static char kScanTopicName[]{"/scan"};
   constexpr static char kCmdTopicName[]{"cmd_vel"};
   constexpr static char kElevatorUpTopicName[]{"elevator_up"};
+  constexpr static char kElevatorUpStringParamName[]{
+      "is_elevator_topic_string"};
 
   constexpr static char kOdomFrame[]{"robot_odom"};
   constexpr static char kBaseLinkFrame[]{"robot_base_link"};
-  constexpr static char kScanFrame[]{"robot_front_laser_base_link"};
+  constexpr static char kScanFrame[]{"robot_front_laser_link"};
   constexpr static char kCartFrame[]{"cart_frame"};
   constexpr static char kPublishFrame[]{"robot_odom"};
 
   constexpr static double kAngleLeftMin{-1.5708}; // [rad]
   constexpr static double kAngleRightMax{1.5708}; // [rad]
   constexpr static auto kTimerPeriod{100ms};
-  constexpr static double kIntensityThreshold{8000};
+  constexpr static double kIntensityThreshold{4000};
   constexpr static double kMinLegsAngularDistance{0.5};
   constexpr static double kKpYaw{1.0};
   constexpr static double kKpDdistance{0.5};
   constexpr static double kGoalPosTol{8e-2};
   constexpr static auto kMotionTimeout{10s};
+  constexpr static auto kLoadShelfDelayDuration{3s};
 
   void subscription_cb(const std::shared_ptr<const LaserScan> msg);
   void service_cb(const std::shared_ptr<Trigger::Request> req,
@@ -80,7 +85,10 @@ private:
   rclcpp::CallbackGroup::SharedPtr group_2_;
   rclcpp::Subscription<LaserScan>::SharedPtr subscription_{};
   rclcpp::Publisher<Twist>::SharedPtr publisher_{};
-  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr elevator_up_publisher_{};
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr
+      elevator_up_empty_publisher_{nullptr};
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr
+      elevator_up_string_publisher_{nullptr};
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_{};
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{};
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
