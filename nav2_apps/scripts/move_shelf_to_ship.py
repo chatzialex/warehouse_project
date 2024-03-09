@@ -142,6 +142,7 @@ class MoveShelfToShip():
         print('Lowering elevator.')
         self.node_.elevator_down_publisher_.publish(Empty())
         rclpy.spin_once(self.node_)
+        return True
 
 
 def main():
