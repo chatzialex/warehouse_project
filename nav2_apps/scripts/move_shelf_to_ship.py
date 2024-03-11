@@ -65,7 +65,7 @@ class MoveShelfToShipNode(Node):
 class MoveShelfToShip():
     footprints = {
         'robot': [[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]],
-        'robot_with_box': [[0.50, 0.50], [0.50, -0.50], [-0.50, -0.50], [-0.50, 0.50]]
+        'robot_with_box': [[0.50, 0.40], [0.50, -0.40], [-0.50, -0.40], [-0.50, 0.40]]
     }
 
     def __init__(self, real_robot):

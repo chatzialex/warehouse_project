@@ -5,8 +5,8 @@ planner_server:
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
       tolerance: 0.5
-      use_astar: false
-      allow_unknown: true
+      use_astar: true
+      allow_unknown: false
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -40,7 +40,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.51
+        inflation_radius: 0.46
       always_send_full_costmap: True
       keepout_filter:
         plugin: "nav2_costmap_2d::KeepoutFilter"
