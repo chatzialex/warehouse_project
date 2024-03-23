@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <nav_msgs/msg/odometry.hpp>
+#include <optional>
 #include <path_planner_server/action/go_to_pose.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/publisher.hpp>
@@ -18,11 +19,16 @@
 #include <stdexcept>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 constexpr char kNodeName[]{"GoToPoseServer"};
 constexpr char kActionName[]{"go_to_pose"};
 constexpr char kOdometryTopicName[]{"/odom"};
 constexpr char kVelocityCommandTopicName[]{"cmd_vel"};
+constexpr static char kMapFrame[]{"map"};
+constexpr static char kOdomFrame[]{"robot_odom"};
 
 class GoToPose : public rclcpp::Node {
 public:
@@ -30,27 +36,32 @@ public:
   using GoalHandleGoToPose = rclcpp_action::ServerGoalHandle<GoToPoseAction>;
 
   GoToPose()
-      : Node{kNodeName},
+      : Node{kNodeName}, tf_buffer_{std::make_unique<tf2_ros::Buffer>(
+                             this->get_clock())},
+        tf_listener_{
+            std::make_shared<tf2_ros::TransformListener>(*this->tf_buffer_)},
         subscription_{this->create_subscription<nav_msgs::msg::Odometry>(
             kOdometryTopicName, 1,
             std::bind(&GoToPose::subscription_cb, this,
                       std::placeholders::_1))},
         publisher_{this->create_publisher<geometry_msgs::msg::Twist>(
             kVelocityCommandTopicName, 1)},
+
         action_server_{rclcpp_action::create_server<GoToPoseAction>(
             this, kActionName,
             std::bind(&GoToPose::handle_goal, this, std::placeholders::_1,
                       std::placeholders::_2),
             std::bind(&GoToPose::handle_cancel, this, std::placeholders::_1),
             std::bind(&GoToPose::handle_accepted, this,
-                      std::placeholders::_1))} {}
+                      std::placeholders::_1))} {
+    RCLCPP_INFO(this->get_logger(), "Started %s action server.", kActionName);
+  }
 
 private:
   enum class State : uint8_t {
     inactive,
     starting,
     preempted,
-    cancelling,
     moving_to_goal,
     rotating_to_goal,
   };
@@ -78,12 +89,16 @@ private:
   void handle_accepted(const std::shared_ptr<GoalHandleGoToPose> goal_handle);
   void execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle);
 
+  // tf
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_{};
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{};
+
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subscription_{};
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_{};
   rclcpp_action::Server<GoToPoseAction>::SharedPtr action_server_;
 
-  geometry_msgs::msg::Pose2D desired_pos_{};
-  geometry_msgs::msg::Pose2D current_pos_{};
+  Eigen::Isometry2d desired_pos_; // in map frame
+  Eigen::Isometry2d current_pos_; // in base link frame
 
   // thread synchronization for action preemption
   std::atomic<State> state_{State::inactive};
@@ -102,9 +117,9 @@ void GoToPose::subscription_cb(const nav_msgs::msg::Odometry::SharedPtr msg) {
   tf2::Matrix3x3(q).getEulerYPR(yaw, pitch, roll);
 
   std::lock_guard<std::mutex> lock{odometry_lock_};
-  current_pos_.x = msg->pose.pose.position.x;
-  current_pos_.y = msg->pose.pose.position.y;
-  current_pos_.theta = yaw;
+  current_pos_ = Eigen::Translation2d{msg->pose.pose.position.x,
+                                      msg->pose.pose.position.y} *
+                 Eigen::Rotation2D{yaw};
 }
 
 rclcpp_action::GoalResponse
@@ -117,7 +132,9 @@ GoToPose::handle_goal(const rclcpp_action::GoalUUID & /*uuid*/,
     cv_.wait(lock, [this] { return this->state_.load() == State::inactive; });
   }
   state_.store(State::starting);
-  desired_pos_ = goal->goal_pos;
+
+  desired_pos_ = Eigen::Translation2d{goal->goal_pos.x, goal->goal_pos.y} *
+                 Eigen::Rotation2Dd{goal->goal_pos.theta};
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
@@ -138,9 +155,16 @@ void GoToPose::handle_accepted(
 
 void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
   RCLCPP_INFO(this->get_logger(), "Executing goal");
-
   auto state_expected{State::starting};
   state_.compare_exchange_strong(state_expected, State::moving_to_goal);
+
+  const auto set_to_inactive{[this] {
+    publisher_->publish(geometry_msgs::msg::Twist{});
+    std::lock_guard<std::mutex> lock{preempt_lock_};
+    state_.store(State::inactive); // allow new goal
+    cv_.notify_one();
+  }};
+
   auto feedback{std::make_shared<GoToPoseAction::Feedback>()};
   auto result{std::make_shared<GoToPoseAction::Result>()};
   geometry_msgs::msg::Twist twist{};
@@ -151,52 +175,72 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
   double theta_des{};
   double dtheta_forward{}, dtheta_backward{};
   decltype(current_pos_) current_pos;
+  std::optional<Eigen::Isometry2d> map_to_base{};
 
   while (rclcpp::ok()) {
-    {
-      std::lock_guard<std::mutex> lock{odometry_lock_};
-      current_pos = current_pos_;
-    }
-    feedback->current_pos = current_pos;
-    RCLCPP_DEBUG(this->get_logger(), "Publish feedback");
-    goal_handle->publish_feedback(feedback);
+
     auto state{state_.load()};
-    if (goal_handle->is_canceling()) {
-      state = State::cancelling;
+
+    if (!goal_handle->is_canceling() && state != State::preempted) {
+      try {
+        const auto t{tf_buffer_->lookupTransform(
+            kMapFrame, kOdomFrame,
+            rclcpp::Time(0, 0, this->get_clock()->get_clock_type()))};
+        Eigen::Isometry3d map_to_base_3d = tf2::transformToEigen(t);
+        map_to_base = Eigen::Isometry2d{};
+        map_to_base->linear() = map_to_base_3d.rotation().block<2, 2>(0, 0);
+        map_to_base->translation() = map_to_base_3d.translation().head<2>();
+      } catch (const tf2::TransformException &ex) {
+        RCLCPP_WARN(this->get_logger(),
+                    "getTransform(): Could not get transform from %s to %s: %s",
+                    kMapFrame, kOdomFrame, ex.what());
+        if (!map_to_base) {
+          continue;
+        }
+      }
+
+      {
+        std::lock_guard<std::mutex> lock{odometry_lock_};
+        current_pos = map_to_base.value() * current_pos_;
+      }
+
+      feedback->current_pos.x = current_pos.translation()(0);
+      feedback->current_pos.y = current_pos.translation()(1);
+      feedback->current_pos.theta =
+          Eigen::Rotation2Dd(current_pos.linear()).angle();
+      RCLCPP_DEBUG(this->get_logger(), "Publish feedback");
+      goal_handle->publish_feedback(feedback);
     }
-    switch (state) {
-    case State::preempted:
+
+    if (state == State::preempted) {
       result->status = false;
       goal_handle->abort(result);
-      publisher_->publish(geometry_msgs::msg::Twist{});
+      set_to_inactive();
       RCLCPP_INFO(this->get_logger(), "Goal preempted by new goal.");
-      {
-        std::lock_guard<std::mutex> lock{preempt_lock_};
-        state_.store(State::inactive); // allow new goal
-        cv_.notify_one();
-      }
       return;
-    case State::cancelling:
+    }
+    if (goal_handle->is_canceling()) {
       result->status = false;
       goal_handle->canceled(result);
-      publisher_->publish(geometry_msgs::msg::Twist{});
+      set_to_inactive();
       RCLCPP_INFO(this->get_logger(), "Goal canceled");
-      {
-        std::lock_guard<std::mutex> lock{preempt_lock_};
-        state_.store(State::inactive); // allow new goal
-        cv_.notify_one();
-      }
       return;
-    case State::moving_to_goal:
-      dx = desired_pos_.x - current_pos.x;
-      dy = desired_pos_.y - current_pos.y;
+    }
+    if (state == State::moving_to_goal) {
+      dx = desired_pos_.translation()(0) - current_pos.translation()(0);
+      dy = desired_pos_.translation()(1) - current_pos.translation()(1);
       ds = std::sqrt(std::pow(dx, 2) + std::pow(dy, 2));
       theta_des = std::atan2(dy, dx);
-      dtheta_forward = std::atan2(std::sin(theta_des - current_pos.theta),
-                                  std::cos(theta_des - current_pos.theta));
-      dtheta_backward =
-          std::atan2(std::sin(theta_des + kPi - current_pos.theta),
-                     std::cos(theta_des + kPi - current_pos.theta));
+      dtheta_forward = std::atan2(
+          std::sin(theta_des -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()),
+          std::cos(theta_des -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()));
+      dtheta_backward = std::atan2(
+          std::sin(theta_des + kPi -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()),
+          std::cos(theta_des + kPi -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()));
       if (ds > kGoalPosTol) {
         bool move_forward{std::abs(dtheta_forward) <=
                           std::abs(dtheta_backward)};
@@ -204,42 +248,35 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
         if (std::abs(dtheta) <= kGoalThetaTol) {
           twist.linear.x = move_forward ? kLinearSpeed : -kLinearSpeed;
           twist.angular.z = 0.0;
-          break;
         } else {
           twist.linear.x = 0.0;
           twist.angular.z = dtheta / 2;
-          break;
+        }
+      } else {
+        state_expected = State::moving_to_goal;
+        if (state_.compare_exchange_strong(state_expected,
+                                           State::rotating_to_goal)) {
+          state = State::rotating_to_goal;
         }
       }
-      state_expected = State::moving_to_goal;
-      if (!state_.compare_exchange_strong(state_expected,
-                                          State::rotating_to_goal)) {
-        break;
-      }
-      [[fallthrough]];
-    case State::rotating_to_goal:
-      theta_des = desired_pos_.theta;
-      dtheta_forward = std::atan2(std::sin(theta_des - current_pos.theta),
-                                  std::cos(theta_des - current_pos.theta));
+    }
+    if (state == State::rotating_to_goal) {
+      theta_des = Eigen::Rotation2Dd(desired_pos_.linear()).angle();
+      dtheta_forward = std::atan2(
+          std::sin(theta_des -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()),
+          std::cos(theta_des -
+                   Eigen::Rotation2Dd(current_pos.linear()).angle()));
       if (std::abs(dtheta_forward) <= kGoalThetaTol) {
         result->status = true;
         goal_handle->succeed(result);
-        publisher_->publish(geometry_msgs::msg::Twist{});
+        set_to_inactive();
         RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-        {
-          std::lock_guard<std::mutex> lock{preempt_lock_};
-          state_.store(State::inactive); // allow new goal
-          cv_.notify_one();
-        }
         return;
       }
       twist.linear.x = 0.0;
       twist.angular.z = dtheta_forward / 2;
-      break;
-    default:
-      throw std::logic_error("We should never be here!");
     }
-
     publisher_->publish(twist);
     loop_rate.sleep();
   }

@@ -52,8 +52,15 @@ ament_target_dependencies(attach_server
 )
 
 add_executable(go_to_pose_server src/go_to_pose_server.cpp)
-ament_target_dependencies(go_to_pose_server rclcpp rclcpp_action
-	nav_msgs geometry_msgs tf2)
+ament_target_dependencies(go_to_pose_server
+  rclcpp
+  rclcpp_action
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_eigen
+)
 rosidl_target_interfaces(go_to_pose_server
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
