@@ -1,4 +1,5 @@
 #include "rclcpp/logging.hpp"
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <condition_variable>
@@ -55,6 +56,9 @@ private:
   };
 
   static_assert(std::atomic<State>::is_always_lock_free);
+
+  // math constants
+  constexpr static double kPi{3.1416};
 
   // settings
   constexpr static double kGoalPosTol{1e-1};
@@ -145,7 +149,7 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
   double dy{};
   double ds{};
   double theta_des{};
-  double dtheta{};
+  double dtheta_forward{}, dtheta_backward{};
   decltype(current_pos_) current_pos;
 
   while (rclcpp::ok()) {
@@ -188,11 +192,17 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
       dy = desired_pos_.y - current_pos.y;
       ds = std::sqrt(std::pow(dx, 2) + std::pow(dy, 2));
       theta_des = std::atan2(dy, dx);
-      dtheta = std::atan2(std::sin(theta_des - current_pos.theta),
-                          std::cos(theta_des - current_pos.theta));
+      dtheta_forward = std::atan2(std::sin(theta_des - current_pos.theta),
+                                  std::cos(theta_des - current_pos.theta));
+      dtheta_backward =
+          std::atan2(std::sin(theta_des + kPi - current_pos.theta),
+                     std::cos(theta_des + kPi - current_pos.theta));
       if (ds > kGoalPosTol) {
+        bool move_forward{std::abs(dtheta_forward) <=
+                          std::abs(dtheta_backward)};
+        auto dtheta{move_forward ? dtheta_forward : dtheta_backward};
         if (std::abs(dtheta) <= kGoalThetaTol) {
-          twist.linear.x = kLinearSpeed;
+          twist.linear.x = move_forward ? kLinearSpeed : -kLinearSpeed;
           twist.angular.z = 0.0;
           break;
         } else {
@@ -209,9 +219,9 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
       [[fallthrough]];
     case State::rotating_to_goal:
       theta_des = desired_pos_.theta;
-      dtheta = std::atan2(std::sin(theta_des - current_pos.theta),
-                          std::cos(theta_des - current_pos.theta));
-      if (std::abs(dtheta) <= kGoalThetaTol) {
+      dtheta_forward = std::atan2(std::sin(theta_des - current_pos.theta),
+                                  std::cos(theta_des - current_pos.theta));
+      if (std::abs(dtheta_forward) <= kGoalThetaTol) {
         result->status = true;
         goal_handle->succeed(result);
         publisher_->publish(geometry_msgs::msg::Twist{});
@@ -224,7 +234,7 @@ void GoToPose::execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle) {
         return;
       }
       twist.linear.x = 0.0;
-      twist.angular.z = dtheta / 2;
+      twist.angular.z = dtheta_forward / 2;
       break;
     default:
       throw std::logic_error("We should never be here!");
