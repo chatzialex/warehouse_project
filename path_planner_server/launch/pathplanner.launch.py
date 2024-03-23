@@ -97,6 +97,14 @@ def launch_setup(context, *args, **kwargs):
             remappings=[('/cmd_vel', cmd_vel_topic)]
         ),
         Node(
+            package='path_planner_server',
+            executable='go_to_pose_server',
+            name='go_to_pose_server',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            remappings=[('/cmd_vel', cmd_vel_topic)]
+        ),
+        Node(
             package="rviz2",
             executable="rviz2",
             output="screen",

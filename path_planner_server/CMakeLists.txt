@@ -8,6 +8,8 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -16,6 +18,12 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/GoToPose.action"
+  DEPENDENCIES std_msgs geometry_msgs
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -43,8 +51,14 @@ ament_target_dependencies(attach_server
   tf2_eigen
 )
 
+add_executable(go_to_pose_server src/go_to_pose_server.cpp)
+ament_target_dependencies(go_to_pose_server rclcpp rclcpp_action
+	nav_msgs geometry_msgs tf2)
+rosidl_target_interfaces(go_to_pose_server
+  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
 install(
-  TARGETS attach_server
+  TARGETS attach_server go_to_pose_server
   DESTINATION lib/${PROJECT_NAME}/)
 
 install(
