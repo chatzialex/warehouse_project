@@ -4,12 +4,16 @@ import types
 import time
 
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+from path_planner_server.action import GoToPose
 
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy
+
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose2D
 from geometry_msgs.msg import Polygon
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Empty
@@ -62,6 +66,42 @@ class MoveShelfToShipNode(Node):
         while not self.client_.wait_for_service(timeout_sec=1.0):
             print('Service not available, waiting again...')
 
+        self._action_client = ActionClient(self, GoToPose, 'go_to_pose')
+        while not self._action_client.wait_for_server(timeout_sec=1.0):
+            print('Action not available, waiting again...')
+
+    def send_goal(self, goal_pose):
+        goal_msg = GoToPose.Goal()
+        goal_msg.goal_pos = goal_pose
+        self.send_goal_future = self._action_client.send_goal_async(goal_msg, feedback_callback=self.feedbackCallback)
+        self.send_goal_future.add_done_callback(self.goalResponseCallback)
+
+    def goalResponseCallback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected :(')
+            return
+
+        self.get_logger().info('Goal accepted :)')
+        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future.add_done_callback(self.getResultCallback)
+
+    def getResultCallback(self, future):
+        result = future.result().result
+        if result.status:
+            self.get_logger().info('Action succeded.')
+        else:
+            self.get_logger().warning('Action failed.')
+
+    def feedbackCallback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info(
+            'Received current pose: x={0}, y={1}, theta={2}'.format(
+                feedback.current_pos.x, feedback.current_pos.y, feedback.current_pos.theta
+            )
+        )
+
+
 class MoveShelfToShip():
     footprints = {
         'robot': [[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]],
@@ -75,11 +115,19 @@ class MoveShelfToShip():
                 'loading position': {'position': {'x': 4.463, 'y': 0.970}, 'orientation': {'z': -0.614, 'w': 0.789}},
                 'shipping_position': {'position': {'x': 1.811, 'y': 1.534}, 'orientation': {'z': 0.737, 'w': 0.676}}
             }
+
+            self.goals_custom = {
+                'post_loading_position': {'position': {'x': 4.0, 'y': 0.4}, 'orientation': {'theta': 3.14}}
+            }
         else:
             self.goals = {
                 'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
                 'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
                 'shipping_position': {'position': {'x': 2.5, 'y': 1.3}, 'orientation': {'z': 0.707, 'w': 0.707}}
+            }
+
+            self.goals_custom = {
+                'post_loading_position': {'position': {'x': 5.0, 'y': -0.5}, 'orientation': {'theta': 3.14}}
             }
 
         self.node_ = MoveShelfToShipNode(node_name='move_shelf_to_ship_node', real_robot=real_robot)
@@ -109,10 +157,11 @@ class MoveShelfToShip():
         self.navigator_.waitUntilNav2Active()
 
     def perform_motion(self):
-        self.elevatorDown()
-        success = (self.goToPose('loading position')
+        success = (self.elevatorDown()
+                   and self.goToPose('loading position')
                    and self.attachToShelf()
                    and self.updateFootprint('robot_with_box')
+                   and self.goToPoseCustom('post_loading_position')
                    and self.goToPose('shipping_position')
                    and self.elevatorDown()
                    and self.updateFootprint('robot')
@@ -144,6 +193,27 @@ class MoveShelfToShip():
         elif result == TaskResult.FAILED:
             print(f'Failed to arrive to {pose_name}.')
             return False
+
+    def goToPoseCustom(self, pose_name):
+        goal_pose = Pose2D()
+        goal_pose.x = self.goals_custom[pose_name]['position']['x']
+        goal_pose.y = self.goals_custom[pose_name]['position']['y']
+        goal_pose.theta = self.goals_custom[pose_name]['orientation']['theta']
+
+        self.node_.send_goal(goal_pose=goal_pose)
+
+        rclpy.spin_until_future_complete(self.node_, self.node_.send_goal_future)
+        if (not self.node_.send_goal_future.result().accepted):
+            return False
+
+        rclpy.spin_once(self.node_)
+        rclpy.spin_once(self.node_)
+        rclpy.spin_until_future_complete(self.node_, self.node_.get_result_future)
+        rclpy.spin_once(self.node_)
+        rclpy.spin_once(self.node_)
+        return self.node_.get_result_future.result().result.status
+
+
 
     def attachToShelf(self):
         print('Attempting to attach shelf.')

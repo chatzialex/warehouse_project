@@ -125,7 +125,6 @@ void GoToPose::subscription_cb(const nav_msgs::msg::Odometry::SharedPtr msg) {
 rclcpp_action::GoalResponse
 GoToPose::handle_goal(const rclcpp_action::GoalUUID & /*uuid*/,
                       std::shared_ptr<const GoToPoseAction::Goal> goal) {
-  RCLCPP_INFO(this->get_logger(), "Received goal request.");
   if (state_.load() != State::inactive) {
     state_.store(State::preempted);
     std::unique_lock lock{preempt_lock_};
@@ -135,6 +134,8 @@ GoToPose::handle_goal(const rclcpp_action::GoalUUID & /*uuid*/,
 
   desired_pos_ = Eigen::Translation2d{goal->goal_pos.x, goal->goal_pos.y} *
                  Eigen::Rotation2Dd{goal->goal_pos.theta};
+  RCLCPP_INFO(this->get_logger(), "Received goal request: x=%f y=%f theta=%f",
+              goal->goal_pos.x, goal->goal_pos.y, goal->goal_pos.theta);
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
