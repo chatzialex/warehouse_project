@@ -127,7 +127,7 @@ class MoveShelfToShip():
             }
 
             self.goals_custom = {
-                'post_loading_position': {'position': {'x': 5.0, 'y': -0.5}, 'orientation': {'theta': 3.14}}
+                'post_loading_position': {'position': {'x': 5.0, 'y': -0.4}, 'orientation': {'theta': 3.14}}
             }
 
         self.node_ = MoveShelfToShipNode(node_name='move_shelf_to_ship_node', real_robot=real_robot)
