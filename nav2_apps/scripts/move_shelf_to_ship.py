@@ -103,13 +103,13 @@ class MoveShelfToShipNode(Node):
 
 
 class MoveShelfToShip():
-    footprints = {
-        'robot': [[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]],
-        'robot_with_box': [[0.50, 0.40], [0.50, -0.40], [-0.50, -0.40], [-0.50, 0.40]]
-    }
-
     def __init__(self, real_robot):
         if (real_robot):
+            self.footprints = {
+                'robot': [[0.20, 0.20], [0.20, -0.20], [-0.20, -0.20], [-0.20, 0.20]],
+                'robot_with_box': [[0.50, 0.60], [0.50, -0.60], [-0.50, -0.60], [-0.50, 0.60]]
+            }
+
             self.goals = {
                 'initial_position': {'position': {'x': 0.216, 'y': 0.0}, 'orientation': {'z': 0.285, 'w': 0.959}},
                 'loading position': {'position': {'x': 4.463, 'y': 0.970}, 'orientation': {'z': -0.614, 'w': 0.789}},
@@ -117,9 +117,14 @@ class MoveShelfToShip():
             }
 
             self.goals_custom = {
-                'post_loading_position': {'position': {'x': 4.0, 'y': 0.4}, 'orientation': {'theta': 3.14}}
+                'post_loading_position': {'position': {'x': 4.0, 'y': 0.9}, 'orientation': {'theta': 3.14}}
             }
         else:
+            self.footprints = {
+                'robot': [[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]],
+                'robot_with_box': [[0.50, 0.40], [0.50, -0.40], [-0.50, -0.40], [-0.50, 0.40]]
+            }
+
             self.goals = {
                 'initial_position': {'position': {'x': 0.0, 'y': 0.0}, 'orientation': {'z': 0.0, 'w': 1.0}},
                 'loading position': {'position': {'x': 5.5, 'y': 0.0}, 'orientation': {'z': -0.707, 'w': 0.707}},
